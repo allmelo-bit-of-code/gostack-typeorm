@@ -61,7 +61,7 @@ class TransactionsRepository extends Repository<Transaction> {
       const newCategory = categoriesRepository.create({
         title,
       });
-      categoriesRepository.save(newCategory);
+      await categoriesRepository.save(newCategory);
       return newCategory;
     }
 

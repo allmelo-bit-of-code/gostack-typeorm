@@ -1,7 +1,4 @@
-// import AppError from '../errors/AppError';
-
 import { getRepository } from 'typeorm';
-import {} from 'uuid-v4';
 import Transaction from '../models/Transaction';
 import AppError from '../errors/AppError';
 

@@ -1,5 +1,5 @@
-// import AppError from '../errors/AppError';
 import { getRepository } from 'typeorm';
+import AppError from '../errors/AppError';
 import TransactionsRepository from '../repositories/TransactionsRepository';
 import Transaction from '../models/Transaction';
 
@@ -14,21 +14,48 @@ class CreateTransactionService {
   public async execute(transactionRequest: Request): Promise<Transaction> {
     const { title, value, type, category } = transactionRequest;
 
-    const checkCategory = new TransactionsRepository();
-    const registeredCategory = await checkCategory.matchCategory(category);
-
+    const checkRequestedTransaction = new TransactionsRepository();
     const newTransaction = getRepository(Transaction);
 
-    const transaction = newTransaction.create({
-      title,
-      value,
-      type,
-      category_id: registeredCategory.id,
-    });
+    if (type === 'outcome') {
+      const checkBalance = await checkRequestedTransaction.getBalance();
+      if (checkBalance.total > value) {
+        const registeredCategory = await checkRequestedTransaction.matchCategory(
+          category,
+        );
 
-    await newTransaction.save(transaction);
+        const transaction = newTransaction.create({
+          title,
+          value,
+          type,
+          category_id: registeredCategory.id,
+        });
 
-    return transaction;
+        await newTransaction.save(transaction);
+
+        return transaction;
+      }
+      throw new AppError('You need to add more funds in your wallet');
+    }
+
+    if (type === 'income') {
+      const registeredCategory = await checkRequestedTransaction.matchCategory(
+        category,
+      );
+
+      const transaction = newTransaction.create({
+        title,
+        value,
+        type,
+        category_id: registeredCategory.id,
+      });
+
+      await newTransaction.save(transaction);
+
+      return transaction;
+    }
+
+    throw new AppError('Type of transaction not recognizable');
   }
 }
 

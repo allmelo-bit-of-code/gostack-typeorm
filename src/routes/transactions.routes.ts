@@ -1,15 +1,21 @@
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
 
-// import TransactionsRepository from '../repositories/TransactionsRepository';
+import TransactionsRepository from '../repositories/TransactionsRepository';
 import CreateTransactionService from '../services/CreateTransactionService';
+import DeleteTransactionService from '../services/DeleteTransactionService';
 // import DeleteTransactionService from '../services/DeleteTransactionService';
 // import ImportTransactionsService from '../services/ImportTransactionsService';
 
 const transactionsRouter = Router();
 
 transactionsRouter.get('/', async (request, response) => {
-  // TODO
+  const transactionsRepository = new TransactionsRepository();
+
+  const transactions = await transactionsRepository.all();
+  const balance = await transactionsRepository.getBalance();
+
+  return response.json({ transactions, balance });
 });
 
 transactionsRouter.post('/', async (request, response) => {
@@ -30,7 +36,13 @@ transactionsRouter.post('/', async (request, response) => {
 });
 
 transactionsRouter.delete('/:id', async (request, response) => {
-  // TODO
+  const uuid = request.params.id;
+
+  const deleteTransaction = new DeleteTransactionService();
+
+  const deletedTransaction = await deleteTransaction.execute({ uuid });
+
+  return response.json(deletedTransaction);
 });
 
 transactionsRouter.post('/import', async (request, response) => {

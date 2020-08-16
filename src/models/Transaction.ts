@@ -21,7 +21,7 @@ class Transaction {
   @Column()
   type: 'income' | 'outcome';
 
-  @Column('money')
+  @Column('float')
   value: number;
 
   @Column()

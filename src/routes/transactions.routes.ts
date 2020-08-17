@@ -1,12 +1,17 @@
 import { Router } from 'express';
+import multer from 'multer';
 import Transaction from '../models/Transaction';
+
+import uploadConfig from '../config/uploads';
 
 import TransactionsRepository from '../repositories/TransactionsRepository';
 import CreateTransactionService from '../services/CreateTransactionService';
 import DeleteTransactionService from '../services/DeleteTransactionService';
-// import ImportTransactionsService from '../services/ImportTransactionsService';
+import ImportTransactionsService from '../services/ImportTransactionsService';
+import AppError from '../errors/AppError';
 
 const transactionsRouter = Router();
+const upload = multer(uploadConfig);
 
 transactionsRouter.get('/', async (request, response) => {
   const transactionsRepository = new TransactionsRepository();
@@ -44,8 +49,19 @@ transactionsRouter.delete('/:id', async (request, response) => {
   return response.json(deletedTransaction);
 });
 
-transactionsRouter.post('/import', async (request, response) => {
-  // TODO
-});
+transactionsRouter.post(
+  '/import',
+  upload.single('file'),
+  async (request, response) => {
+    if (request.file.mimetype === 'text/csv') {
+      const importTransactionsService = new ImportTransactionsService();
+      const importedTransactions = await importTransactionsService.execute(
+        request.file.filename,
+      );
+      return response.json(importedTransactions);
+    }
+    throw new AppError('Incorrect extension. Only CSV files are allowed');
+  },
+);
 
 export default transactionsRouter;

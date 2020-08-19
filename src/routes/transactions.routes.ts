@@ -25,15 +25,13 @@ transactionsRouter.get('/', async (request, response) => {
 transactionsRouter.post('/', async (request, response) => {
   const { title, value, type, category } = request.body;
 
-  const verifyCategory = category.toLowerCase();
-
   const newTransaction = new CreateTransactionService();
 
   const createdTransaction = await newTransaction.execute({
     title,
     value,
     type,
-    category: verifyCategory,
+    category,
   });
 
   return response.json(createdTransaction);

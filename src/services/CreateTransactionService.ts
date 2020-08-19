@@ -31,9 +31,9 @@ class CreateTransactionService {
           category_id: registeredCategory.id,
         });
 
-        await newTransaction.save(transaction);
+        const registeredTransaction = await newTransaction.save(transaction);
 
-        return transaction;
+        return registeredTransaction;
       }
       throw new AppError('You need to add more funds in your wallet');
     }
@@ -50,9 +50,9 @@ class CreateTransactionService {
         category_id: registeredCategory.id,
       });
 
-      await newTransaction.save(transaction);
+      const registeredTransaction = await newTransaction.save(transaction);
 
-      return transaction;
+      return registeredTransaction;
     }
 
     throw new AppError('Type of transaction not recognizable');

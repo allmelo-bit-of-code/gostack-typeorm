@@ -1,10 +1,10 @@
 import path from 'path';
 import csvParse from 'csv-parse';
 import fs from 'fs';
-import { getRepository } from 'typeorm';
+import { getRepository, In } from 'typeorm';
 
-import TransactionsRepository from '../repositories/TransactionsRepository';
 import Transaction from '../models/Transaction';
+import Category from '../models/Category';
 import uploadConfig from '../config/uploads';
 import AppError from '../errors/AppError';
 
@@ -17,6 +17,8 @@ interface CSVTransaction {
 
 class ImportTransactionsService {
   async execute(filename: string): Promise<Transaction[]> {
+    // Reading the CSV file
+
     const csvFilePath = path.join(uploadConfig.directory, filename);
 
     const readCSVStream = fs.createReadStream(csvFilePath);
@@ -30,15 +32,12 @@ class ImportTransactionsService {
     const parseCSV = readCSVStream.pipe(parseStream);
 
     const originalData: CSVTransaction[] = [];
-    const processedData: Transaction[] = [];
 
     parseCSV.on('data', async line => {
-      const [title, type, value, rawCategory] = line;
+      const [title, type, value, category] = line;
       if (!title || !type || !value) {
         throw new AppError('CSV Invalid, please reformat');
       }
-      const category = rawCategory.toLowerCase();
-
       originalData.push({ title, type, value, category });
     });
 
@@ -46,49 +45,88 @@ class ImportTransactionsService {
       parseCSV.on('end', resolve);
     });
 
-    const checkRequestedTransaction = new TransactionsRepository();
+    // Dealing with new categories
+
+    const everyCategoryOnImport = originalData.map(data => data.category);
+
+    const categoriesToRegister = everyCategoryOnImport.filter(function (
+      elem,
+      index,
+      self,
+    ) {
+      return index === self.indexOf(elem);
+    });
+
+    const categoriesRepository = getRepository(Category);
+
+    const categoriesToIgnore = await categoriesRepository.find({
+      where: { title: In(categoriesToRegister) },
+    });
+
+    for (let cat = 0; cat < categoriesToIgnore.length; cat += 1) {
+      for (let i = 0; i < categoriesToRegister.length; i += 1) {
+        if (categoriesToRegister[i] === categoriesToIgnore[cat].title) {
+          categoriesToRegister.splice(i, 1);
+          i -= 1;
+        }
+      }
+    }
+
+    const allCategories = [];
+
+    if (categoriesToIgnore.length > 0) {
+      for (let i = 0; i < categoriesToIgnore.length; i += 1) {
+        allCategories.push(categoriesToIgnore[i]);
+      }
+    }
+
+    if (categoriesToRegister.length > 0) {
+      const newCategories = categoriesToRegister.map(title =>
+        categoriesRepository.create({ title }),
+      );
+
+      const newRegisteredCategories = await categoriesRepository.save(
+        newCategories,
+      );
+
+      for (let i = 0; i < newRegisteredCategories.length; i += 1) {
+        allCategories.push(newRegisteredCategories[i]);
+      }
+    }
+
+    // Dealing with new transactions
+
+    const newTransactions: Transaction[] = [];
     const newTransaction = getRepository(Transaction);
 
-    const allTransactions = originalData.map(async transaction => {
-      if (transaction.type === 'outcome') {
-        const checkBalance = await checkRequestedTransaction.getBalance();
-        if (checkBalance.total > transaction.value) {
-          const registeredCategory = await checkRequestedTransaction.matchCategory(
-            transaction.category,
-          );
+    for (let i = 0; i < originalData.length; i += 1) {
+      const categoryToMatch = originalData[i];
 
-          const registeredTransaction = newTransaction.create({
-            title: transaction.title,
-            value: transaction.value,
-            type: transaction.type,
-            category_id: registeredCategory.id,
-          });
+      const categoryReference = allCategories.find(
+        category => category.title === categoryToMatch.category,
+      );
 
-          await newTransaction.save(registeredTransaction);
-
-          return registeredTransaction;
-        }
-        throw new AppError('You need to add more funds in your wallet');
+      if (!categoryReference) {
+        throw new AppError('Problem found on import');
       }
 
-      if (transaction.type === 'income') {
-        const registeredCategory = await checkRequestedTransaction.matchCategory(
-          transaction.category,
-        );
+      const transaction = newTransaction.create({
+        title: originalData[i].title,
+        value: originalData[i].value,
+        type: originalData[i].type,
+        category_id: categoryReference.id,
+      });
 
-        const registeredTransaction = newTransaction.create({
-          title: transaction.title,
-          value: transaction.value,
-          type: transaction.type,
-          category_id: registeredCategory.id,
-        });
+      newTransactions.push(transaction);
+    }
 
-        await newTransaction.save(registeredTransaction);
+    if (newTransactions.length !== originalData.length) {
+      throw new AppError('Lost some transactions while processing import');
+    }
 
-        return registeredTransaction;
-      }
-    });
-    return allTransactions;
+    await newTransaction.save(newTransactions);
+
+    return newTransactions;
   }
 }
 
